@@ -1,0 +1,388 @@
+---
+title: "TRUST4 SHM analysis - WT vs KO project"
+output:
+  html_document:
+    code_download: yes
+    code_folding: hide
+    css: "style.css"
+    dev: "png"
+    df_print: kable
+    fig_caption: yes
+    fig_width: 4
+    fig_height: 3
+    highlight: kate
+    keep_md: no
+    theme: yeti
+    toc: yes
+    toc_depth: 3
+    toc_float:
+        collapsed: false
+        smooth_scroll: false
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup-options}
+#| include = FALSE
+
+# change these and the previous options and CSS as desired
+# to see how the notebook would knit without running any code, add `eval = FALSE` here
+knitr::opts_chunk$set(comment = NA, dpi = 300, class.source = "fold-show",
+                      eval = TRUE, fig.align = "center", out.width = "100%")
+```
+
+------------------------------------------------------------------------
+
+## Overview and setup
+
+### Analysis overview
+
+**Author(s):** Gisela Gabernet <br>
+**Last Updated:** `r Sys.Date()`
+
+**R version:** `r R.Version()$version.string`<br>
+**Platform:** `r R.Version()$platform`<br>
+**Running under:** `r sessionInfo()$running`
+
+
+
+### Script setup
+
+If you are running this Rmd file within RStudio, make sure that "Knit Directory" is set to "Current Working Directory".
+
+```{r setup}
+#| eval = TRUE
+
+# make sure the environment is clear of user objects
+# note that custom set working directories, loaded libraries, etc. will be unaffected
+# you may need to fully restart R for reproducibility
+#rm(list = ls())
+
+# define the working directory
+path_base <- file.path("") # operating system (Linux, Windows, Mac)
+# setwd(path_base) # not recommended
+
+# set the data directory
+path_data_root <- file.path("/mnt/volume/Projects/lucas_trust4/results_WT_KO") # operating system (Linux, Windows, Mac)
+
+
+# set options if desired
+options(encoding = "UTF-8") # instead of ANSI
+
+# Need to install from source due to incompatibilities
+#remove.packages("Matrix")
+#remove.packages("irlba")
+#install.packages("Matrix",type="source", dependencies=T)
+#install.packages("irlba",type="source", dependencies=T)
+
+# list (and install if needed) CRAN packages
+packages <- c("alakazam", "kableExtra", "knitr", "patchwork", "dplyr", "ggplot2",
+              "RColorBrewer", "rlang", "Seurat", "stringr", "tidyverse", 
+              "Matrix", "irlba", "clustree", "ggpubr") # some people prefer cowplot over patchwork
+new_pkg <- packages[!(packages %in% installed.packages())]
+if (length(new_pkg)) {install.packages(new_pkg)}
+
+# list (and install if needed) Bioconductor packages
+packages_additional <- c()
+new_pkg_additional <- packages_additional[!(packages_additional %in% installed.packages())]
+if (length(new_pkg_additional)) {BiocManager::install(new_pkg_additional)}
+
+# load packages
+packages <- sort(append(packages, packages_additional)) # so the list of versions will be in order
+for (n in seq_along(packages)) {
+  suppressPackageStartupMessages(library(packages[n], character.only = TRUE))
+  cat(paste0(packages[n], ": ", packageVersion(packages[n]), "\n")) # print simplified package versions
+}
+
+# remove unnecessary variables
+rm(n, new_pkg, new_pkg_additional, packages, packages_additional)
+```
+
+### Visualization and themes
+
+This will help the figures created later on to be more standardized and interpretable:
+
+```{r colors}
+#| class.source = "fold-show",
+#| eval = TRUE
+#| 
+theme_set(theme_classic())
+
+# to help distinguish between different groups during visualization (violin plots, UMAPs, etc.)
+#source(here::here("scripts", "colors.R"))
+```
+
+```{r ggplot-themes}
+#| class.source = "fold-show",
+#| eval = TRUE
+
+# or whatever sizes and themes you want
+#source(here::here("scripts", "themes.R"))
+```
+
+## Results with alignment high quality filter
+
+Results with BCR sequences with >200 aligned positions and max 10% N nucleotides.
+
+### Reading data
+
+
+```{r }
+rep_dir <- file.path(path_data_root,"clonal_analysis","define_clones","all_reps_clone_report","repertoires")
+rep_files_list <- list.files(rep_dir)
+
+rep_list_path <- lapply(rep_files_list, function(x) file.path(rep_dir,x))
+
+rep_list <- lapply(rep_list_path, airr::read_rearrangement)
+bcr_data <- dplyr::bind_rows(rep_list)
+
+print("Loaded BCR data from samples:")
+unique(bcr_data$sample_id)
+
+rm(rep_files_list, rep_list_path, rep_list)
+
+#Make mu_freq_numeric, filter consensus count > 1
+bcr_data_filt <- bcr_data %>%
+             dplyr::filter(consensus_count > 1) %>%
+             dplyr::filter(locus == "IGH") %>%
+             dplyr::mutate(mu_freq = as.numeric(mu_freq),
+                           group = ifelse(grepl("WT",sample_id),"WT","KO"),
+                           isotype_coarse = str_sub(isotype,1,4))
+          
+```
+
+
+### Number of sequences per sample
+
+Heavy chains only
+
+```{r}
+bcr_data_filt$sample_id <- factor(bcr_data_filt$sample_id, 
+                                     levels=c("WT1","WT2","WT4","WT5",
+                                              "KO1","KO3","KO4","KO5"))
+bcr_data_filt$group <- factor(bcr_data_filt$group, levels=c("WT","KO"))
+n_seqs <- bcr_data_filt %>%
+  dplyr::group_by(sample_id) %>%
+  dplyr::summarize(n_seq = n())
+
+ggplot(n_seqs, aes(x = sample_id, y = n_seq)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Number of sequences per sample", x = "Sample ID", y = "Number of sequences")
+
+
+```
+
+### SHM frequency plot
+
+Heavy chains only
+```{r}
+ggplot(bcr_data_filt, aes(x= sample_id, y = mu_freq, fill=group)) +
+  geom_violin(draw_quantiles = c(0.5)) +
+  labs(title = "SHM frequency", x = "", y = "Mut. frequency") +
+  labs(x="", y="Mutation freq.", title="SHM frequency")
+
+```
+
+### Compare mean SHM frequency
+
+```{r}
+mean_mu_freq <- bcr_data_filt %>%
+  dplyr::group_by(sample_id,group) %>%
+  dplyr::summarize(mean_mu_freq = mean(mu_freq), sd_mu_freq = sd(mu_freq))
+
+ggplot(mean_mu_freq, aes(x = group, y = mean_mu_freq, fill = group)) +
+  geom_boxplot() +
+  geom_point() +
+  labs(x = "", y = "mean mutation freq.", title = "Mean SHM frequency")
+
+```
+
+### Check percent isotype
+
+```{r}
+isotype_freq <- bcr_data_filt %>%
+  dplyr::group_by(sample_id, group, isotype_coarse) %>%
+  dplyr::summarize(n_seq = n()) %>%
+  dplyr::mutate(perc_isotype = n_seq/sum(n_seq)*100)
+
+ggplot(isotype_freq, aes(x = isotype_coarse, y = perc_isotype, fill = group)) +
+  geom_boxplot() +
+  geom_point(position = position_dodge(0.75)) +
+  labs(title = "Isotype frequency", x = "", y = "% IGH sequences")
+```
+
+
+### Compare mean SHM frequency per isotype
+
+```{r}
+mean_mu_freq_isotype <- bcr_data_filt %>%
+  dplyr::group_by(sample_id,group,isotype_coarse) %>%
+  dplyr::summarize(mean_mu_freq = mean(mu_freq), sd_mu_freq = sd(mu_freq))
+
+ggplot(mean_mu_freq_isotype %>% filter(isotype_coarse %in% c("IGHG", "IGHM", NA)), aes(x = isotype_coarse, y = mean_mu_freq, fill = group)) +
+  geom_boxplot() +
+  geom_point(position = position_dodge(width = 0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", size=5, label.y = 0.019) +
+  scale_y_continuous(limits = c(0, 0.022)) +
+labs(x="", y="mean mutation freq.", title="Mean SHM frequency per isotype")
+
+```
+
+
+
+### IGHV gene usage
+
+```{r, fig.width=15, fig.height=5}
+vh_gene <- countGenes(bcr_data_filt, gene= "v_call", groups = "sample_id", mode="gene")
+
+bcr_data_filt_meta <- bcr_data_filt %>% 
+  dplyr::select(sample_id, subject_id, group) %>%
+  dplyr::distinct()
+  
+vh_gene_meta <- vh_gene %>%
+  left_join(bcr_data_filt_meta, by = "sample_id")
+
+ggplot(vh_gene_meta, aes(x = gene, y = seq_freq, color = group)) +
+  geom_boxplot() +
+  geom_point(position = position_dodge(width = 0.75)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### IGHV1-72 usage (NP-OVA specific response)
+
+```{r, fig.width=4, fig.height=3}
+vh172_freq <- vh_gene_meta %>%
+  dplyr::filter(gene == "IGHV1-72")
+
+ggplot(vh172_freq, aes(x = gene, y = seq_freq, color = group)) +
+  geom_boxplot() +
+  geom_point(position = position_dodge(width = 0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif") +
+  labs(x="", y="Seq. frequency")
+```
+
+Number of IGHV1-72 sequences
+
+```{r}
+ggplot(vh172_freq, aes(x=sample_id, y=seq_count, fill=group)) +
+  geom_bar(stat="identity") +
+  labs(x="", y="IGHV1-72 seq. count")
+```
+
+### Mutation frequency in IGHV1-72
+
+```{r}
+bcr_data_filt_IGHV172 <- bcr_data_filt %>%
+  mutate(v_gene = alakazam::getGene(v_call)) %>%
+  dplyr::filter(v_gene == "IGHV1-72")
+
+mean_mu_freq_isotype <- bcr_data_filt_IGHV172 %>%
+  dplyr::group_by(sample_id,group,isotype_coarse) %>%
+  dplyr::summarize(mean_mu_freq = mean(mu_freq), sd_mu_freq = sd(mu_freq))
+
+ggplot(mean_mu_freq_isotype %>% filter(isotype_coarse %in% c("IGHG", "IGHM", NA)), aes(x = isotype_coarse, y = mean_mu_freq, fill = group)) +
+  geom_boxplot() +
+  geom_point(position = position_dodge(width = 0.75)) +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", size=5, label.y = 0.055) +
+  #scale_y_continuous(limits = c(0, 0.06)) +
+labs(x="", y="mean mutation freq.", title="Mean SHM frequency in IGHV1-72")
+```
+
+### Checking Trp (W) to Leu (L) conversions
+
+Codon 33 in V186.2 for Rajewshy et al. 1987, Science
+As shown in [IMGT](http://www.imgt.org/IMGTrepertoire/index.php?section=LocusGenes&repertoire=genetable&species=Mus_musculus&group=IGHV).
+This corresponds to IMGT V1-72*01
+Checking the translation shows a W at position 38 that matches the position and AA motif surrounding 
+codon 33 of Rajewshy et al. 1987; namely, GYTFXXXXTSYWMHWVK in IMGT maps to GYTFSWMHVK in Fig 3.
+
+IMGT `112:114` is codon number 38:
+```{r get_codon}
+shazam:::getCodonNumb(112:114)
+```
+
+
+Get subset of sequences with IGHV1-72 v_call, then translate the sequence alignment to amino acids to check for the W38L conversion.
+
+Number of sequences with IGHV1-72 v_call in all mice:
+
+```{r check_trp_to_leu}
+bcr_data_filt_IGHV172 <- bcr_data_filt_IGHV172 %>%
+                    mutate( sequence_alignment_aa = translateDNA(sequence_alignment),
+                            ighv172_codon38_nt = substr(sequence_alignment, start=112, stop=114),
+                            ighv172_codon38_aa = alakazam:::translateDNA(ighv172_codon38_nt, trim=F)
+                    ) %>%
+                    mutate(across(c(sample_id, group, ighv172_codon38_aa), factor))
+
+```
+
+Number of sequences with W, L and X (unknown) at codon 38:
+
+```{r}
+count_codon <- bcr_data_filt_IGHV172 %>%
+  group_by(sample_id, group) %>%
+  summarize(count_W = sum(ighv172_codon38_aa == "W"),
+            count_L = sum(ighv172_codon38_aa == "L"),
+            count_X = sum(ighv172_codon38_aa == "X"),
+            count_other = sum(!ighv172_codon38_aa %in% c("W", "L" ,"X")))
+kable(count_codon)
+```
+
+Percentages of W, L and X (unknown) at codon 38:
+
+```{r}
+perc_codon <- bcr_data_filt_IGHV172 %>%
+  group_by(sample_id, group) %>%
+  summarize(perc_W = sum(ighv172_codon38_aa == "W")/n() * 100,
+            perc_L = sum(ighv172_codon38_aa == "L")/n() * 100,
+            perc_X = sum(ighv172_codon38_aa == "X")/n() * 100,
+            perc_other = sum(!ighv172_codon38_aa %in% c("W", "L" ,"X"))/n() * 100)
+kable(perc_codon)
+```
+
+
+```{r}
+ggplot(bcr_data_filt_IGHV172, aes(x=sample_id, fill=ighv172_codon38_aa)) +
+  geom_bar() +
+  scale_fill_manual(values = c("W" = "slateblue", "L" = "firebrick", "X" = "gray80", "C" = "gray60", "R" = "gray40", "S" = "gray20")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x="", y="Count", fill="Codon 38 AA")
+
+```
+
+Barplot with percentages:
+
+```{r}
+bcr_data_filt_IGHV172 %>%
+  ggplot(aes(x=sample_id, fill=ighv172_codon38_aa)) +
+  geom_bar(position="fill") +
+  scale_fill_manual(values = c("W" = "slateblue", "L" = "firebrick", "X" = "gray80", "C" = "gray60", "R" = "gray40", "S" = "gray20")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x="", y="Frequency of codon38 aa", fill="Codon 38 AA")
+
+```
+
+
+### Compare %W38L across all mice
+
+Calculate percentage of W38L from all IGHV1-72 sequences with known aa at codon 38:
+
+```{r fig.width=4, fig.height=3}
+
+perc_W_L_ofknown <- bcr_data_filt_IGHV172 %>%
+  dplyr::filter(!ighv172_codon38_aa %in% c("X")) %>%
+  dplyr::group_by(sample_id, group) %>%
+  dplyr::summarize(perc_W = sum(ighv172_codon38_aa == "W")/n() * 100,
+            perc_L = sum(ighv172_codon38_aa == "L")/n() * 100)
+
+ggplot(perc_W_L_ofknown, aes(x=group, y=perc_L, fill=group)) +
+  geom_boxplot() +
+  geom_point(position = position_dodge(width = 0.75)) +
+  scale_y_continuous(limits = c(0, 85)) +
+  stat_compare_means(comparisons = list(c("WT","KO")), method = "wilcox.test", label = "p.signif", size=5) +
+  labs(x="", y="% W38L", fill="Group")
+
+
+```
+  

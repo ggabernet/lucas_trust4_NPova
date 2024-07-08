@@ -1,0 +1,9 @@
+filename_R1	filename_R2	sample_id	subject_id	sex	species	pcr_target_locus	tissue	age	biomaterial_provider	single_cell
+/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/KI1_231_346_S29_L007_R1_001.fastq.gz	/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/KI1_231_346_S29_L007_R2_001.fastq.gz	KI1	KI1	NA	human	IG	PBMC	NA	Yale	FALSE
+/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/KI2_219_358_S30_L007_R1_001.fastq.gz	/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/KI2_219_358_S30_L007_R2_001.fastq.gz	KI2	KI2	NA	human	IG	PBMC	NA	Yale	FALSE
+/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/KI3_207_370_S31_L007_R1_001.fastq.gz	/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/KI3_207_370_S31_L007_R2_001.fastq.gz	KI3	KI3	NA	human	IG	PBMC	NA	Yale	FALSE
+/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/KI4_195_382_S32_L007_R1_001.fastq.gz	/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/KI4_195_382_S32_L007_R2_001.fastq.gz	KI4	KI4	NA	human	IG	PBMC	NA	Yale	FALSE
+/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/WT1_279_298_S25_L007_R1_001.fastq.gz	/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/WT1_279_298_S25_L007_R2_001.fastq.gz	WT1	WT1	NA	human	IG	PBMC	NA	Yale	FALSE
+/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/WT2_267_310_S26_L007_R1_001.fastq.gz	/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/WT2_267_310_S26_L007_R2_001.fastq.gz	WT2	WT2	NA	human	IG	PBMC	NA	Yale	FALSE
+/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/WT3_255_322_S27_L007_R1_001.fastq.gz	/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/WT3_255_322_S27_L007_R2_001.fastq.gz	WT3	WT3	NA	human	IG	PBMC	NA	Yale	FALSE
+/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/WT4_243_334_S28_L007_R1_001.fastq.gz	/gpfs/gibbs/pi/kleinstein/gg647/lucas-trust4/data/WT4_243_334_S28_L007_R2_001.fastq.gz	WT4	WT4	NA	human	IG	PBMC	NA	Yale	FALSE
